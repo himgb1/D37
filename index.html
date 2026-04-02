@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photo to WhatsApp - OCR Phone Extractor</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Tesseract.js v5 from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📸 Photo to WhatsApp</h1>
+      <p class="subtitle">Upload a photo, extract phone numbers, send WhatsApp messages</p>
+    </header>
+
+    <main>
+      <!-- Upload Section -->
+      <section class="upload-section">
+        <div
+          id="uploadZone"
+          class="upload-zone"
+          role="button"
+          tabindex="0"
+          aria-label="Upload image file"
+        >
+          <div class="upload-icon">📁</div>
+          <p>Drag and drop an image here, or click to select</p>
+          <input
+            type="file"
+            id="fileInput"
+            accept="image/*"
+            hidden
+          >
+        </div>
+
+        <!-- Image Preview -->
+        <div id="previewContainer" class="preview-container hidden">
+          <img id="preview" alt="Uploaded image preview">
+          <button id="removeImage" class="btn btn-secondary btn-small">Remove Image</button>
+        </div>
+      </section>
+
+      <!-- Message Template Section -->
+      <section class="message-section">
+        <label for="messageTemplate">Message Template:</label>
+        <select id="templateSelector" class="template-selector">
+          <option value="full">Full Template (with store details)</option>
+          <option value="simple">Simple Template (pickup only)</option>
+        </select>
+        <textarea
+          id="messageTemplate"
+          rows="4"
+          placeholder="Enter your WhatsApp message..."
+        >【取件】快遞<Item ID>包裹已於<Check-in Date>到達石硤尾白田購物中心驛站D37，免費存放期3天（入庫當天算第一天），請盡快憑取件碼【<Pickup Number>】取件。自提點地址：九龍石硤尾偉智里1-3號白田購物中心地下29號（好佳味手撕雞隔離），營業時間：週一~週日10:00~21:00營業;公衆假期10:00~21:00營業，請在3個營業日内取件。</textarea>
+        <p class="template-hint">Available placeholders: &lt;Item ID&gt;, &lt;Check-in Date&gt;, &lt;Pickup Number&gt;</p>
+      </section>
+
+      <!-- Process Button -->
+      <section class="action-section">
+        <button id="processBtn" class="btn btn-primary" disabled>
+          Extract Phone Numbers
+        </button>
+      </section>
+
+      <!-- Progress Section -->
+      <section id="progressSection" class="progress-section hidden">
+        <div class="progress-bar-container">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="progressText" class="progress-text">Initializing...</p>
+      </section>
+
+      <!-- Error Display -->
+      <div id="error" class="error hidden" role="alert"></div>
+
+      <!-- Results Section -->
+      <section id="resultsSection" class="results-section hidden">
+        <!-- Extracted Text (Collapsible) -->
+        <details class="extracted-text-section">
+          <summary>View Extracted Text</summary>
+          <pre id="extractedText" class="extracted-text"></pre>
+        </details>
+
+        <!-- Extracted Data (ItemID, Date, Pickup Number) -->
+        <div id="extractedData" class="extracted-data-section hidden">
+          <h3>📋 Extracted Fields</h3>
+          <div class="fields-grid">
+            <div class="field-item">
+              <label>Item ID:</label>
+              <span id="fieldItemId" class="field-value">-</span>
+              <button class="btn btn-small btn-copy-field" data-field="itemId">Copy</button>
+            </div>
+            <div class="field-item">
+              <label>Check-in Date:</label>
+              <span id="fieldDate" class="field-value">-</span>
+              <button class="btn btn-small btn-copy-field" data-field="date">Copy</button>
+            </div>
+            <div class="field-item">
+              <label>Pickup Number:</label>
+              <span id="fieldPickup" class="field-value">-</span>
+              <button class="btn btn-small btn-copy-field" data-field="pickup">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phone Numbers -->
+        <div class="phone-numbers-header">
+          <h2>📞 Phone Numbers Found: <span id="phoneCount">0</span></h2>
+        </div>
+        <div id="phoneList" class="phone-list"></div>
+
+        <!-- No Results Message -->
+        <div id="noResults" class="no-results hidden">
+          <p>😕 No phone numbers detected in this image.</p>
+          <p>Try uploading a clearer image or check the extracted text above.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>All processing happens locally in your browser. No data is uploaded to any server.</p>
+      <p>Powered by <a href="https://github.com/naptha/tesseract.js" target="_blank" rel="noopener">Tesseract.js</a></p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
