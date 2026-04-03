@@ -467,15 +467,18 @@ function extractPhoneNumbers(text) {
 
   // Normalize and filter with stricter validation
   const normalized = [];
+  console.log('=== Phone Extraction Debug ===');
+  console.log('Raw candidates from OCR (before normalization):', Array.from(rawNumbers));
   rawNumbers.forEach(num => {
     const clean = normalizePhoneNumber(num);
     if (clean) {
       normalized.push(clean);
-      console.log('Normalized phone: "' + num + '" -> "' + clean + '"');
+      console.log('  ✅ Accepted: "' + num + '" -> "' + clean + '"');
     } else {
-      console.log('Rejected phone candidate:', num);
+      console.log('  ❌ Rejected:', num);
     }
   });
+  console.log('Final normalized list:', normalized);
 
   // Deduplicate after normalization
   const finalPhones = [...new Set(normalized)];
@@ -542,48 +545,63 @@ function extractFields(text) {
 }
 
 function normalizePhoneNumber(raw) {
+  console.log('[normalizePhoneNumber] INPUT:', raw, '(type:', typeof raw, ')');
+
   // Convert fullwidth digits (０-９) to ASCII digits first (common in Chinese OCR)
   let cleaned = raw.replace(/[０-９]/g, d => {
     const code = d.charCodeAt(0);
     return String.fromCharCode(code - 0xFEE0); // Convert fullwidth to ASCII
   });
+  console.log('  After fullwidth conversion:', cleaned);
 
-  // Remove all non-digit characters except leading +
-  let digits = cleaned.replace(/[^\d+]/g, '');
+  // Remove all non-digit characters (keep digits only)
+  let digits = cleaned.replace(/[^\d]/g, '');
+  console.log('  After removing non-digits:', digits);
 
   // Remove Hong Kong country code (852) if present at the start
-  // This handles both "852-xxxxx" and "852xxxxx" formats
   if (digits.startsWith('852')) {
     digits = digits.substring(3);
-    console.log('Stripped HK country code 852 from:', cleaned, '-> remaining:', digits);
+    console.log('  Stripped HK country code 852 -> remaining:', digits);
+  } else {
+    console.log('  No 852 prefix detected');
   }
-
-  // Remove any leading + if present (keep pure digits for WhatsApp)
-  digits = digits.replace(/^\+/, '');
 
   // Count actual digits
   const digitCount = digits.length;
+  console.log('  Final digit count:', digitCount);
 
   // Validate: 4-10 digits for local HK numbers, 7-15 for international
   if (digitCount < 4 || digitCount > 15) {
+    console.log('  REJECTED: digit count out of range');
     return null;
   }
 
   // Additional check: if the number is all the same digit (likely not a phone)
   if (/^(\d)\1+$/.test(digits)) {
-    return null; // e.g., "5555555" is suspicious
+    console.log('  REJECTED: repeated digit pattern');
+    return null;
   }
 
+  console.log('  FINAL result:', digits);
   return digits;
 }
 
 function generateWhatsAppLink(phone, message) {
-  const cleanPhone = phone.replace(/[^\d+]/g, '');
+  // Remove all non-digits
+  let cleanPhone = phone.replace(/[^\d]/g, '');
+
+  // Always prepend Hong Kong country code (852) if not already present
+  // The app extracts local numbers (e.g., 59509794), but WhatsApp needs international format
+  if (!cleanPhone.startsWith('852')) {
+    cleanPhone = '852' + cleanPhone;
+  }
+
   const encodedMessage = encodeURIComponent(message.trim());
   return `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
 }
 
 function renderResults(phoneNumbers, fullText, elements, fields = null) {
+  console.log('[renderResults] phoneNumbers received:', phoneNumbers);
   // Show results section
   elements.resultsSection.classList.remove('hidden');
   elements.phoneList.innerHTML = '';
@@ -677,6 +695,7 @@ function renderResults(phoneNumbers, fullText, elements, fields = null) {
     // Show WhatsApp URI for debugging/verification
     const message = elements.messageTemplate.value;
     const waUrl = generateWhatsAppLink(phone, message);
+    console.log('WhatsApp URL for phone "' + phone + '":', waUrl);
     const uriDiv = document.createElement('div');
     uriDiv.className = 'phone-uri';
     uriDiv.textContent = waUrl;
