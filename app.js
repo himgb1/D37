@@ -438,40 +438,49 @@ async function performOCR(imageSource, elements) {
 function extractPhoneNumbers(text) {
   // Multiple regex patterns for different phone number formats
   const patterns = [
-    // E.164 international format (with optional +)
+    // E.164 international format: +[country code][number]
     /\+?1?[1-9]\d{1,14}/g,
     // US/Canada: (123) 456-7890, 123-456-7890, 123.456.7890, 1234567890
     /\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g,
-    // Generic: sequences of digits with common separators (5-20 chars)
-    /\+?[\d\s\-]{5,20}/g
+    // Generic: sequences of digits, possibly with separators (7-15 digits after cleaning)
+    /[\d\s\-]{7,20}/g
   ];
 
   const rawNumbers = new Set();
 
   // Collect all matches from all patterns
-  patterns.forEach(pattern => {
+  const debugMatches = [];
+  patterns.forEach((pattern, pIndex) => {
     const matches = text.match(pattern);
     if (matches) {
       matches.forEach(match => {
         const cleaned = match.trim();
-        if (cleaned.length >= 7) { // Basic minimum before normalization
+        if (cleaned.length >= 7) { // Keep longer candidates (min 7 chars)
           rawNumbers.add(cleaned);
+          debugMatches.push({ pattern: pIndex + 1, raw: cleaned });
         }
       });
     }
   });
 
-  // Normalize and filter
+  console.log('Raw phone candidates before normalization:', debugMatches);
+
+  // Normalize and filter with stricter validation
   const normalized = [];
   rawNumbers.forEach(num => {
     const clean = normalizePhoneNumber(num);
     if (clean) {
       normalized.push(clean);
+      console.log('Normalized phone: "' + num + '" -> "' + clean + '"');
+    } else {
+      console.log('Rejected phone candidate:', num);
     }
   });
 
   // Deduplicate after normalization
-  return [...new Set(normalized)];
+  const finalPhones = [...new Set(normalized)];
+  console.log('Final phone numbers after deduplication:', finalPhones);
+  return finalPhones;
 }
 
 function extractFields(text) {
@@ -533,18 +542,36 @@ function extractFields(text) {
 }
 
 function normalizePhoneNumber(raw) {
+  // Convert fullwidth digits (０-９) to ASCII digits first (common in Chinese OCR)
+  let cleaned = raw.replace(/[０-９]/g, d => {
+    const code = d.charCodeAt(0);
+    return String.fromCharCode(code - 0xFEE0); // Convert fullwidth to ASCII
+  });
+
   // Remove all non-digit characters except leading +
-  let digits = raw.replace(/[^\d+]/g, '');
+  let digits = cleaned.replace(/[^\d+]/g, '');
 
-  // If doesn't start with +, it's a local number
-  // Keep as-is; user can add country code if needed
+  // Remove Hong Kong country code (852) if present at the start
+  // This handles both "852-xxxxx" and "852xxxxx" formats
+  if (digits.startsWith('852')) {
+    digits = digits.substring(3);
+    console.log('Stripped HK country code 852 from:', cleaned, '-> remaining:', digits);
+  }
 
-  // Count actual digits (excluding +)
-  const digitCount = digits.replace(/\+/g, '').length;
+  // Remove any leading + if present (keep pure digits for WhatsApp)
+  digits = digits.replace(/^\+/, '');
 
-  // Validate: 7-15 digits is reasonable for phone numbers
-  if (digitCount < 7 || digitCount > 15) {
+  // Count actual digits
+  const digitCount = digits.length;
+
+  // Validate: 4-10 digits for local HK numbers, 7-15 for international
+  if (digitCount < 4 || digitCount > 15) {
     return null;
+  }
+
+  // Additional check: if the number is all the same digit (likely not a phone)
+  if (/^(\d)\1+$/.test(digits)) {
+    return null; // e.g., "5555555" is suspicious
   }
 
   return digits;
@@ -580,6 +607,24 @@ function renderResults(phoneNumbers, fullText, elements, fields = null) {
   }
 
   elements.noResults.classList.add('hidden');
+
+  // Debug: Show raw phone candidates (hidden by default, can be expanded)
+  // This helps diagnose extraction issues
+  if (window.DEBUG || true) { // set window.DEBUG = true to force show
+    const debugExists = document.getElementById('phoneDebug');
+    if (!debugExists) {
+      const debugDetails = document.createElement('details');
+      debugDetails.id = 'phoneDebug';
+      debugDetails.className = 'extracted-text-section';
+      debugDetails.innerHTML = '<summary>Debug: Raw Phone Candidates (from OCR)</summary><pre id="debugPhoneList" style="padding: 10px; font-size: 0.8rem; color: #666;"></pre>';
+      elements.resultsSection.insertBefore(debugDetails, elements.resultsSection.firstChild);
+    }
+    document.getElementById('debugPhoneList').textContent = JSON.stringify({
+      extractedTextLength: fullText.length,
+      phoneNumbers: phoneNumbers,
+      fields: fields
+    }, null, 2);
+  }
 
   // Create phone number cards
   phoneNumbers.forEach(phone => {
@@ -628,6 +673,17 @@ function renderResults(phoneNumbers, fullText, elements, fields = null) {
     actions.appendChild(waBtn);
 
     card.appendChild(actions);
+
+    // Show WhatsApp URI for debugging/verification
+    const message = elements.messageTemplate.value;
+    const waUrl = generateWhatsAppLink(phone, message);
+    const uriDiv = document.createElement('div');
+    uriDiv.className = 'phone-uri';
+    uriDiv.textContent = waUrl;
+    uriDiv.title = 'WhatsApp link (click to copy)';
+    uriDiv.onclick = () => copyToClipboard(waUrl, uriDiv);
+    uriDiv.style.cursor = 'pointer';
+    card.appendChild(uriDiv);
     elements.phoneList.appendChild(card);
   });
 
