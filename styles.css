@@ -51,6 +51,7 @@ header .subtitle {
   cursor: pointer;
   transition: all 0.3s ease;
   background: #f9f9f9;
+  position: relative;
 }
 
 .upload-zone:hover,
@@ -75,6 +76,27 @@ header .subtitle {
   color: #555;
   font-size: 1.1rem;
 }
+
+/* Preview Container */
+.preview-container {
+  margin-top: 20px;
+  display: inline-block;
+}
+
+.preview-container img {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 8px;
+  display: block;
+  margin: 0 auto;
+  border: 1px solid #ddd;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+
+
+
 
 /* Preview Container */
 .preview-container {

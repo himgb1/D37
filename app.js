@@ -23,6 +23,11 @@ function initializeApp() {
     messageTemplate: document.getElementById('messageTemplate'),
     templateSelector: document.getElementById('templateSelector'),
     processBtn: document.getElementById('processBtn'),
+    debugSection: document.getElementById('debugSection'),
+    debugBtn: document.getElementById('debugBtn'),
+    debugModal: document.getElementById('debugModal'),
+    debugImage: document.getElementById('debugImage'),
+    closeDebug: document.getElementById('closeDebug'),
     progressSection: document.getElementById('progressSection'),
     progressBar: document.getElementById('progressBar'),
     progressText: document.getElementById('progressText'),
@@ -112,6 +117,33 @@ function initializeApp() {
     resetUpload(elements);
   });
 
+  // Debug button: show preprocessed image
+  if (elements.debugBtn) {
+    elements.debugBtn.addEventListener('click', () => {
+      if (elements._preprocessedDataUrl) {
+        elements.debugImage.src = elements._preprocessedDataUrl;
+        elements.debugModal.classList.remove('hidden');
+      } else {
+        showError('No preprocessed image available. Process an image first.', elements);
+      }
+    });
+  }
+
+  // Close debug modal
+  if (elements.closeDebug) {
+    elements.closeDebug.addEventListener('click', () => {
+      elements.debugModal.classList.add('hidden');
+    });
+  }
+  // Close modal on background click
+  if (elements.debugModal) {
+    elements.debugModal.addEventListener('click', (e) => {
+      if (e.target === elements.debugModal) {
+        elements.debugModal.classList.add('hidden');
+      }
+    });
+  }
+
   // Process button
   elements.processBtn.addEventListener('click', () => {
     if (elements.preview.src) {
@@ -135,7 +167,6 @@ function handleFileUpload(file, elements) {
   // Show preview and keep reference to the file object
   const reader = new FileReader();
   reader.onload = (e) => {
-    // Use the data URL directly for preview (no resize needed, CSS will scale it)
     const img = new Image();
     img.onload = () => {
       elements.preview.src = e.target.result;
@@ -164,8 +195,6 @@ function handleFileUpload(file, elements) {
   reader.readAsDataURL(file);
 }
 
-// Preprocess image to improve OCR accuracy
-// Applies: grayscale, contrast enhancement, adaptive thresholding
 function preprocessImage(imageSource) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -194,13 +223,16 @@ function preprocessImage(imageSource) {
       const imageData = ctx.getImageData(0, 0, width, height);
       const data = imageData.data;
 
-      // Simple preprocessing: grayscale + adaptive threshold
+      // Simple preprocessing: grayscale + blue channel boost + threshold
+      // For grey text, the blue channel often has lower values (text appears blue-ish)
+      // We'll use: gray = 0.299*R + 0.587*G + 0.114*B - 20% of blue channel
+      // This subtracts blue to make grey text darker
       for (let i = 0; i < data.length; i += 4) {
-        // Convert to grayscale
         const r = data[i];
         const g = data[i + 1];
         const b = data[i + 2];
-        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        // Boost contrast for grey/blue text by subtracting a portion of blue
+        const gray = Math.max(0, 0.299 * r + 0.587 * g + 0.114 * b - 0.2 * b);
         data[i] = gray;
         data[i + 1] = gray;
         data[i + 2] = gray;
@@ -217,24 +249,11 @@ function preprocessImage(imageSource) {
       let sum = 0;
       for (let i = 0; i < 256; i++) sum += i * hist[i];
 
-      let maxVariance = 0;
-      let threshold = 128;
-      let sumB = 0, weightB = 0, weightF = 0;
-
-      for (let t = 0; t < 256; t++) {
-        weightB += hist[t];
-        if (weightB === 0) continue;
-        weightF = total - weightB;
-        if (weightF === 0) break;
-        sumB += t * hist[t];
-        const meanB = sumB / weightB;
-        const meanF = (sum - sumB) / weightF;
-        const variance = weightB * weightF * Math.pow(meanB - meanF, 2);
-        if (variance > maxVariance) {
-          maxVariance = variance;
-          threshold = t;
-        }
-      }
+      // Use a fixed threshold of 180 - this captures light grey text
+      // Otsu's adaptive often fails on documents with large white areas
+      // 180 is a good balance: keeps light grey as black, white stays white
+      const threshold = 180;
+      console.log('Using fixed threshold:', threshold);
 
       // Apply threshold
       for (let i = 0; i < data.length; i += 4) {
@@ -289,6 +308,7 @@ function resetUpload(elements) {
   elements.processBtn.disabled = true;
   elements.resultsSection.classList.add('hidden');
   elements.progressSection.classList.add('hidden');
+  elements.debugSection.classList.add('hidden');
   elements.progressBar.style.width = '0%';
 
   // Clean up blob URL
@@ -297,6 +317,7 @@ function resetUpload(elements) {
     elements._blobUrl = null;
   }
   elements._currentFile = null;
+  elements._preprocessedDataUrl = null;
 
   hideError(elements);
 }
@@ -335,6 +356,9 @@ async function processImage(elements) {
     const preprocessedImage = await preprocessImage(imageSource);
     console.log('Preprocessing complete');
 
+    // Store preprocessed image for debugging
+    elements._preprocessedDataUrl = preprocessedImage;
+
     // Perform OCR
     updateProgress(20, 'Starting OCR...', elements);
     console.log('Starting OCR with Tesseract...');
@@ -363,6 +387,10 @@ async function processImage(elements) {
     setTimeout(() => {
       elements.progressSection.classList.add('hidden');
       renderResults(phoneNumbers, text, elements, fields);
+      // Show debug section since we have a preprocessed image
+      if (elements.debugSection) {
+        elements.debugSection.classList.remove('hidden');
+      }
     }, 500);
 
     // Cleanup preprocessed image blob if created
@@ -500,11 +528,42 @@ function extractFields(text) {
     fields.itemId = 'HK' + itemIdMatch[1];
   }
 
-  // Extract DateOfCheckIn: DD-MM-YYYY format, located next to "入庫"
-  // Matches: 入庫19-01-2026 or 入庫 19-01-2026 (with spaces)
-  const dateMatch = text.match(/入庫 *(\d{2}-\d{2}-\d{4})/);
-  if (dateMatch) {
-    fields.dateOfCheckIn = dateMatch[1];
+  // Extract DateOfCheckIn: DD/MM/YYYY or DD-MM-YYYY
+  // With reasonable validation: day (01-31), month (01-12)
+  const datePattern = /(\d{2})[-\/](\d{2})[-\/](\d{4})/;
+
+  // Strategy 1: Find date after "入庫" (handles time in between)
+  let dateMatch = text.match(/入庫.*?(\d{2})[-\/](\d{2})[-\/](\d{4})/);
+  if (dateMatch && isValidDate(dateMatch[1], dateMatch[2])) {
+    // Normalize to YYYY-MM-DD format
+    fields.dateOfCheckIn = `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`;
+  } else {
+    // Strategy 2: Find any date on a line that contains "入庫"
+    const lines = text.split(/\r?\n/);
+    for (let line of lines) {
+      if (line.includes('入庫')) {
+        const m = line.match(datePattern);
+        if (m && isValidDate(m[1], m[2])) {
+          fields.dateOfCheckIn = `${m[3]}-${m[2]}-${m[1]}`;
+          break;
+        }
+      }
+    }
+  }
+
+  // If still not found, look for any valid date pattern in the entire text (last resort)
+  if (!fields.dateOfCheckIn) {
+    const anyDateMatch = text.match(datePattern);
+    if (anyDateMatch && isValidDate(anyDateMatch[1], anyDateMatch[2])) {
+      fields.dateOfCheckIn = `${anyDateMatch[3]}-${anyDateMatch[2]}-${anyDateMatch[1]}`;
+    }
+  }
+
+  // Helper: validate day and month ranges
+  function isValidDate(day, month) {
+    const d = parseInt(day, 10);
+    const m = parseInt(month, 10);
+    return d >= 1 && d <= 31 && m >= 1 && m <= 12;
   }
 
   // Extract PickupNumber: pattern X-X-XXXX
