@@ -703,8 +703,11 @@ function renderResults(phoneNumbers, fullText, elements, fields = null) {
     }, null, 2);
   }
 
-  // Create phone number cards
-  phoneNumbers.forEach(phone => {
+  // Create phone number cards - only show the first one if multiple found
+  // (if more than 1 phone numbers found, only show the first one, others are collapsed)
+  const displayNumbers = phoneNumbers.length > 1 ? [phoneNumbers[0]] : phoneNumbers;
+
+  displayNumbers.forEach(phone => {
     const card = document.createElement('div');
     card.className = 'phone-card';
 
@@ -764,6 +767,9 @@ function renderResults(phoneNumbers, fullText, elements, fields = null) {
     card.appendChild(uriDiv);
     elements.phoneList.appendChild(card);
   });
+
+  // Update phone count to show how many were found (but we only display the first if multiple)
+  elements.phoneCount.textContent = phoneNumbers.length;
 
   // Add event listeners for field copy buttons
   document.querySelectorAll('.btn-copy-field').forEach(btn => {
