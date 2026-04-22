@@ -751,6 +751,17 @@ function renderResults(phoneNumbers, fullText, elements, fields = null) {
       }
     };
     actions.appendChild(waBtn);
+    // Call button to initiate phone call via tel: link
+    const callBtn = document.createElement('button');
+    callBtn.className = 'btn btn-call';
+    callBtn.style.backgroundColor = '#e0d5f5';
+    callBtn.innerHTML = '<span class="icon icon-phone">📞</span> Call';
+    callBtn.onclick = () => {
+      const telUrl = `tel:${phone}`;
+      // Use location href to trigger call; open in same window
+      window.location.href = telUrl;
+    };
+    actions.appendChild(callBtn);
 
     card.appendChild(actions);
 
