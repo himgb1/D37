@@ -44,6 +44,8 @@ function initializeApp() {
     full: `【取件】快遞<Item ID>包裹已於<Check-in Date>到達石硤尾白田購物中心驛站D37，免費存放期3天（入庫當天算第一天），請盡快憑取件碼【<Pickup Number>】取件。自提點地址：九龍石硤尾偉智里1-3號白田購物中心地下29號（好佳味手撕雞隔離），營業時間：週一~週日10:00~21:00營業;公衆假期10:00~21:00營業，請在3個營業日内取件。`,
     simple: `請憑取件碼【<Pickup Number>】儘快領取。自提點地址：白田購物中心驛站D37（好佳味手撕雞隔離），營業時間：週一~週日;公衆假期 10:00~21:00`,
     pickupConfirm: `你好，請問<Item ID>這個包裹您已收到了是嗎？取件碼為【<Pickup Number>】`
+    pickupConfirmWithNoDamage: `你好，請問<Item ID>這個包裹您已收到了及沒有破損是嗎？取件碼為【<Pickup Number>】`
+	pickupConfirmWithLessAndNoDamage: `你好，請問<Item ID>這個包裹您已收到了，但發現少件及包裹沒有破損是嗎？取件碼為【<Pickup Number>】`
   };
 
   // Load saved template preference and text from localStorage
